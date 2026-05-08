@@ -41,7 +41,7 @@ step()    { echo ""; echo -e "${BOLD}── $* ──${RESET}"; }
 
 step "Installing packages"
 apt-get update -qq
-apt-get install -y nginx fail2ban
+apt-get install -y nginx fail2ban python3-systemd
 success "nginx and fail2ban installed"
 
 # ---------------------------------------------------------------------------
