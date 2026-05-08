@@ -7,8 +7,8 @@ nginx reverse proxy for Ubuntu 24 LTS — sits behind Cloudflare, forwards to ba
 Run once on a fresh server:
 
 ```bash
-git clone https://github.com/LynxTR/proxy-config.git
-cd proxy-config
+git clone https://github.com/LynxTR/proxy-config.git && \
+cd proxy-config && \
 sudo ./bootstrap.sh
 ```
 
@@ -17,11 +17,12 @@ Installs nginx + fail2ban, applies sysctl tuning, deploys all configs, and puts 
 ## Commands
 
 ```bash
-lynxsetup list                                          # show all domains
-sudo lynxsetup add <domain> <backend-ip> <port>         # add an app
+lynxsetup list                                           # show all domains
+sudo lynxsetup add <domain> <backend-ip> <port>          # add an app
 sudo lynxsetup add-imgproxy <domain> <backend-ip> <port> # add imgproxy cache
-sudo lynxsetup delete <domain>                          # remove (prompts confirm)
-sudo lynxsetup delete <domain> -y                       # remove without prompt
+sudo lynxsetup add-ssh-key "<pubkey>"                    # add SSH key + disable password auth
+sudo lynxsetup delete <domain>                           # remove (prompts confirm)
+sudo lynxsetup delete <domain> -y                        # remove without prompt
 ```
 
 ## Examples
