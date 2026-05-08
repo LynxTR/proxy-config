@@ -1,0 +1,47 @@
+# templates/app.conf.template
+# Used by: sudo lynxsetup add <domain> <upstream-ip> <port>
+
+upstream __APP_UPSTREAM__ {
+    server __UPSTREAM_IP__:__PORT__;
+
+    keepalive         16;
+    keepalive_requests 1000;
+    keepalive_timeout  60s;
+}
+
+# HTTP — Cloudflare connects to origin over plain HTTP (Flexible SSL mode).
+# TLS is terminated by Cloudflare; no certs needed here.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    # Only accept traffic from Cloudflare edge nodes
+    include /etc/nginx/snippets/cloudflare-allowlist.conf;
+
+    access_log /var/log/nginx/__APP_NAME__.access.log main buffer=64k flush=5s;
+    error_log  /var/log/nginx/__APP_NAME__.error.log warn;
+
+    location / {
+        proxy_pass http://__APP_UPSTREAM__;
+
+        proxy_http_version 1.1;
+        proxy_set_header   Connection $connection_upgrade;
+        proxy_set_header   Upgrade    $http_upgrade;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+
+        # Rate limiting — 200 req/s sustained, burst of 300 without delay.
+        # 300 burst covers the asset flood of a cold page load.
+        # Returns 429 on breach (caught by fail2ban nginx-ratelimit jail).
+        limit_req zone=general burst=300 nodelay;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+
+        proxy_buffer_size        8k;
+        proxy_buffers            8 16k;
+        proxy_busy_buffers_size  32k;
+    }
+}

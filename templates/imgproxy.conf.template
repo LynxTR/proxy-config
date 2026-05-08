@@ -1,0 +1,63 @@
+# templates/imgproxy.conf.template
+# Used by: sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>
+
+upstream imgproxy_backend {
+    server __UPSTREAM_IP__:__IMGPROXY_PORT__;
+
+    keepalive         32;
+    keepalive_requests 1000;
+    keepalive_timeout  60s;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __IMGPROXY_DOMAIN__;
+
+    # Only accept traffic from Cloudflare edge nodes
+    include /etc/nginx/snippets/cloudflare-allowlist.conf;
+
+    access_log /var/log/nginx/imgproxy.access.log main buffer=64k flush=5s;
+    error_log  /var/log/nginx/imgproxy.error.log warn;
+
+    location / {
+        proxy_pass http://imgproxy_backend;
+
+        proxy_http_version 1.1;
+        proxy_set_header   Connection "";
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+
+        limit_req zone=imgproxy burst=150 nodelay;
+
+        proxy_cache     imgproxy_cache;
+        proxy_cache_key "$scheme$request_method$host$request_uri";
+
+        proxy_cache_valid 200 301 302 3650d;
+        proxy_cache_valid 404 1m;
+
+        proxy_cache_use_stale         error timeout updating
+                                      http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+
+        proxy_cache_lock         on;
+        proxy_cache_lock_timeout 5s;
+
+        proxy_cache_revalidate on;
+
+        proxy_ignore_headers Cache-Control Expires Set-Cookie;
+        proxy_hide_header    Set-Cookie;
+
+        proxy_buffering         on;
+        proxy_buffer_size       16k;
+        proxy_buffers           8 32k;
+        proxy_busy_buffers_size 64k;
+        proxy_max_temp_file_size 0;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    120s;
+        proxy_read_timeout    120s;
+
+        add_header X-Cache-Status $upstream_cache_status always;
+    }
+}

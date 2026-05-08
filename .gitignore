@@ -1,0 +1,13 @@
+# Your real configuration — never commit this
+.env
+
+# Generated nginx configs — contain your real domains and IPs
+conf.d/*.conf
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp

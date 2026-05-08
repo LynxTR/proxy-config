@@ -1,0 +1,25 @@
+# logrotate/nginx
+#
+# Rotates all nginx logs daily, compresses old ones, keeps 14 days.
+# Deployed to: /etc/logrotate.d/nginx
+#
+# At 3000 req/s a single access log can hit several GB/day — rotation is
+# critical to prevent the disk filling up.
+
+/var/log/nginx/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+
+    # Send USR1 to nginx after rotation so it reopens the log files.
+    # Without this nginx keeps writing to the renamed (old) file.
+    postrotate
+        if [ -f /run/nginx.pid ]; then
+            kill -USR1 "$(cat /run/nginx.pid)"
+        fi
+    endscript
+}
