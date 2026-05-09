@@ -20,6 +20,10 @@ server {
     access_log /var/log/nginx/imgproxy.access.log main buffer=64k flush=5s;
     error_log  /var/log/nginx/imgproxy.error.log warn;
 
+    location = "/" {
+        return 444;
+    }
+
     location / {
         proxy_pass http://imgproxy_backend;
 
