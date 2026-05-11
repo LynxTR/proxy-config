@@ -32,8 +32,6 @@ server {
 
         include /etc/nginx/snippets/proxy-headers.conf;
 
-        limit_req zone=imgproxy burst=60 nodelay;
-
         proxy_cache     imgproxy_cache;
         proxy_cache_key "$scheme$request_method$host$request_uri";
 

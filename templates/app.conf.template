@@ -31,11 +31,6 @@ server {
 
         include /etc/nginx/snippets/proxy-headers.conf;
 
-        # Rate limiting — 200 req/s sustained, burst of 300 without delay.
-        # 300 burst covers the asset flood of a cold page load.
-        # Returns 429 on breach (caught by fail2ban nginx-ratelimit jail).
-        limit_req zone=general burst=60 nodelay;
-
         proxy_connect_timeout 10s;
         proxy_send_timeout    60s;
         proxy_read_timeout    60s;
