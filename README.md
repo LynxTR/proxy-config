@@ -1,6 +1,7 @@
 # proxy-config
 
-nginx reverse proxy for Ubuntu 24 LTS — sits behind Cloudflare, forwards to backend servers, optionally caches images via imgproxy. Includes fail2ban and kernel tuning.
+> **⚠️ Personal setup — not intended for production use.**
+> This configuration is tailored to a specific personal environment. It is published for reference only. Use at your own risk.
 
 ## Setup
 

@@ -49,9 +49,8 @@ server {
 
         proxy_ignore_headers Cache-Control Expires Set-Cookie;
         proxy_hide_header    Set-Cookie;
-        # imgproxy emits both "max-age=…, public" and "no-store"; the latter
-        # causes Cloudflare to BYPASS its cache.  Strip all upstream
-        # Cache-Control headers and replace with a single clean directive.
+
+        # overwrites upstream "no-store" header
         proxy_hide_header    Cache-Control;
         add_header           Cache-Control "max-age=31536000, public" always;
 
