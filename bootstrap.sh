@@ -14,9 +14,11 @@
 #
 # After this, manage domains with:
 #   lynxsetup list
-#   sudo lynxsetup add app.example.com <upstream-ip> <port>
-#   sudo lynxsetup add-imgproxy img.example.com <upstream-ip> <port>
-#   sudo lynxsetup delete app.example.com
+#   sudo lynxsetup add <app-name> <domain> <upstream-ip> <port>
+#   sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>
+#   sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]
+#   sudo lynxsetup delete <domain>
+#   sudo lynxsetup update
 
 set -euo pipefail
 

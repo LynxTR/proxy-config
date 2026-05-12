@@ -5,7 +5,7 @@
 #   lynxsetup list                                               list all configured domains
 #   sudo lynxsetup add <domain> <upstream-ip> <port>             add a reverse-proxy domain
 #   sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>    add an imgproxy caching domain
-#   sudo lynxsetup add-r2 <app> <domain> <r2-custom-domain> [prefix]   add an R2 bucket proxy
+#   sudo lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]     add an R2 bucket proxy
 #   sudo lynxsetup delete <domain>                               remove a domain
 #   sudo lynxsetup add-ssh-key "<pubkey>"                        add SSH public key + disable password auth
 #   sudo lynxsetup update                                        pull latest repo changes and re-apply config
@@ -14,7 +14,7 @@
 #   lynxsetup list
 #   sudo lynxsetup add app.client1.com 10.0.0.1 3000
 #   sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080
-#   sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets
+#   sudo lynxsetup add-r2 assets.example.com r2.example.com /assets
 #   sudo lynxsetup delete app.client1.com
 #   sudo lynxsetup add-ssh-key "ssh-ed25519 AAAA... user@host"
 
@@ -191,14 +191,14 @@ cmd_add_imgproxy() {
 }
 
 # ---------------------------------------------------------------------------
-# lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]
+# lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]
 # ---------------------------------------------------------------------------
 cmd_add_r2() {
     require_root add-r2 "$@"
 
-    if [[ $# -lt 3 ]]; then
-        echo "Usage: sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]"
-        echo "  e.g. sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets"
+    if [[ $# -lt 2 ]]; then
+        echo "Usage: sudo lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]"
+        echo "  e.g. sudo lynxsetup add-r2 assets.example.com r2.example.com /assets"
         echo "  path-prefix defaults to /"
         echo ""
         echo "  <r2-custom-domain> is the domain attached to your R2 bucket in the"
@@ -206,7 +206,10 @@ cmd_add_r2() {
         exit 1
     fi
 
-    local app_name="$1" domain="$2" r2_custom_domain="$3" path_prefix="${4:-/}"
+    local domain="$1" r2_custom_domain="$2" path_prefix="${3:-/}"
+    local app_name
+    app_name=$(domain_to_filename "$domain")
+    app_name="${app_name%.conf}"  # strip .conf suffix for use in log names
     local out_file="$NGINX_CONF_DIR/${app_name}-r2.conf"
 
     # Normalise: strip trailing slash, then re-add for non-root prefixes so
@@ -442,7 +445,7 @@ usage() {
     echo "  lynxsetup list"
     echo "  sudo lynxsetup add <domain> <upstream-ip> <port>"
     echo "  sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>"
-    echo "  sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]"
+    echo "  sudo lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]"
     echo "  sudo lynxsetup delete <domain> [-y]"
     echo "  sudo lynxsetup update"
     echo ""
@@ -450,7 +453,7 @@ usage() {
     echo "  lynxsetup list"
     echo "  sudo lynxsetup add app.client1.com 10.0.0.1 3000"
     echo "  sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080"
-    echo "  sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets"
+    echo "  sudo lynxsetup add-r2 assets.example.com r2.example.com /assets"
     echo "  sudo lynxsetup delete app.client1.com"
     echo "  sudo lynxsetup delete app.client1.com -y   # skip confirmation"
     echo "  sudo lynxsetup add-ssh-key \"ssh-ed25519 AAAA... user@host\""
