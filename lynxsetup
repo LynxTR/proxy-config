@@ -236,7 +236,8 @@ cmd_add_r2() {
     systemctl reload nginx
     success "R2 proxy added: $domain → $r2_custom_domain (prefix: $path_prefix)"
     echo "  Config: $out_file"
-    echo "  Access: https://$domain${path_prefix}/your-file.jpg"
+    local access_prefix="${path_prefix%/}"  # strip trailing slash for display only
+    echo "  Access: https://$domain${access_prefix}/your-file.jpg"
 }
 
 # ---------------------------------------------------------------------------
