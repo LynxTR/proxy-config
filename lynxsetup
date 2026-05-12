@@ -2,16 +2,18 @@
 # lynxsetup — nginx domain management CLI.
 #
 # Commands:
-#   lynxsetup list                                          list all configured domains
-#   sudo lynxsetup add <domain> <upstream-ip> <port>        add a reverse-proxy domain
-#   sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>  add an imgproxy caching domain
-#   sudo lynxsetup delete <domain>                          remove a domain
-#   sudo lynxsetup add-ssh-key "<pubkey>"                   add SSH public key + disable password auth
+#   lynxsetup list                                               list all configured domains
+#   sudo lynxsetup add <domain> <upstream-ip> <port>             add a reverse-proxy domain
+#   sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>    add an imgproxy caching domain
+#   sudo lynxsetup add-r2 <app> <domain> <r2-custom-domain> [prefix]   add an R2 bucket proxy
+#   sudo lynxsetup delete <domain>                               remove a domain
+#   sudo lynxsetup add-ssh-key "<pubkey>"                        add SSH public key + disable password auth
 #
 # Usage examples:
 #   lynxsetup list
 #   sudo lynxsetup add app.client1.com 10.0.0.1 3000
 #   sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080
+#   sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets
 #   sudo lynxsetup delete app.client1.com
 #   sudo lynxsetup add-ssh-key "ssh-ed25519 AAAA... user@host"
 
@@ -23,6 +25,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT")"
 
 TEMPLATE="$SCRIPT_DIR/templates/app.conf.template"
 IMGPROXY_TEMPLATE="$SCRIPT_DIR/templates/imgproxy.conf.template"
+R2_TEMPLATE="$SCRIPT_DIR/templates/r2-proxy.conf.template"
 NGINX_CONF_DIR="/etc/nginx/conf.d"
 
 # ---------------------------------------------------------------------------
@@ -187,6 +190,52 @@ cmd_add_imgproxy() {
 }
 
 # ---------------------------------------------------------------------------
+# lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]
+# ---------------------------------------------------------------------------
+cmd_add_r2() {
+    require_root add-r2 "$@"
+
+    if [[ $# -lt 3 ]]; then
+        echo "Usage: sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]"
+        echo "  e.g. sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets"
+        echo "  path-prefix defaults to /"
+        echo ""
+        echo "  <r2-custom-domain> is the domain attached to your R2 bucket in the"
+        echo "  Cloudflare dashboard: R2 → <bucket> → Settings → Custom Domains"
+        exit 1
+    fi
+
+    local app_name="$1" domain="$2" r2_custom_domain="$3" path_prefix="${4:-/}"
+    local out_file="$NGINX_CONF_DIR/${app_name}-r2.conf"
+
+    # Normalise: strip trailing slash, then re-add for non-root prefixes so
+    # nginx's location /assets/ correctly matches /assets and /assets/foo.
+    [[ "$path_prefix" != "/" ]] && path_prefix="${path_prefix%/}/"
+
+    [[ -f "$out_file" ]] && error "R2 config already exists: $out_file"
+    [[ -f "$R2_TEMPLATE" ]] || error "Template not found: $R2_TEMPLATE"
+
+    info "Generating nginx config for $domain → $r2_custom_domain (prefix: $path_prefix)"
+    sed \
+        -e "s|__DOMAIN__|${domain}|g" \
+        -e "s|__APP_NAME__|${app_name}|g" \
+        -e "s|__R2_CUSTOM_DOMAIN__|${r2_custom_domain}|g" \
+        -e "s|__R2_PATH_PREFIX__|${path_prefix}|g" \
+        "$R2_TEMPLATE" > "$out_file"
+
+    info "Testing nginx config"
+    if ! nginx -t 2>&1; then
+        rm -f "$out_file"
+        error "nginx config test failed — config removed."
+    fi
+
+    systemctl reload nginx
+    success "R2 proxy added: $domain → $r2_custom_domain (prefix: $path_prefix)"
+    echo "  Config: $out_file"
+    echo "  Access: https://$domain${path_prefix}/your-file.jpg"
+}
+
+# ---------------------------------------------------------------------------
 # lynxsetup add-ssh-key "<pubkey>"
 # ---------------------------------------------------------------------------
 cmd_add_ssh_key() {
@@ -309,12 +358,14 @@ usage() {
     echo "  lynxsetup list"
     echo "  sudo lynxsetup add <domain> <upstream-ip> <port>"
     echo "  sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>"
+    echo "  sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]"
     echo "  sudo lynxsetup delete <domain> [-y]"
     echo ""
     echo "Examples:"
     echo "  lynxsetup list"
     echo "  sudo lynxsetup add app.client1.com 10.0.0.1 3000"
     echo "  sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080"
+    echo "  sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets"
     echo "  sudo lynxsetup delete app.client1.com"
     echo "  sudo lynxsetup delete app.client1.com -y   # skip confirmation"
     echo "  sudo lynxsetup add-ssh-key \"ssh-ed25519 AAAA... user@host\""
@@ -324,6 +375,7 @@ case "${1:-}" in
     list)           shift; cmd_list         "$@" ;;
     add)            shift; cmd_add          "$@" ;;
     add-imgproxy)   shift; cmd_add_imgproxy "$@" ;;
+    add-r2)         shift; cmd_add_r2       "$@" ;;
     add-ssh-key)    shift; cmd_add_ssh_key  "$@" ;;
     delete)         shift; cmd_delete       "$@" ;;
     -h|--help|help) usage ;;

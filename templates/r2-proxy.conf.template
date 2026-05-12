@@ -1,0 +1,66 @@
+# templates/r2-proxy.conf.template
+# Used by: sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]
+#
+# Proxies requests to a Cloudflare R2 bucket via its Cloudflare custom domain.
+# The bucket must have a custom domain attached in the Cloudflare dashboard:
+#   R2 → <bucket> → Settings → Custom Domains → Add domain
+# No credentials or signing needed — Cloudflare authenticates to R2 natively.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__;
+
+    include /etc/nginx/snippets/cloudflare-allowlist.conf;
+
+    access_log /var/log/nginx/__APP_NAME__.access.log main buffer=64k flush=5s;
+    error_log /var/log/nginx/__APP_NAME__.error.log warn;
+
+    location = "/" {
+        return 444;
+    }
+
+    location __R2_PATH_PREFIX__ {
+        # Strip the path prefix before forwarding to the R2 custom domain.
+        # /?  keeps this correct when __R2_PATH_PREFIX__ is / (avoids ^//$).
+        # The trailing slash on the location ensures /assets redirects to /assets/.
+        rewrite ^__R2_PATH_PREFIX__/?(.*)$ /$1 break;
+
+        proxy_pass https://__R2_CUSTOM_DOMAIN__;
+
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host __R2_CUSTOM_DOMAIN__;
+
+        proxy_ssl_server_name on;
+        proxy_ssl_name __R2_CUSTOM_DOMAIN__;
+
+        proxy_cache r2_cache;
+        proxy_cache_key "$host$uri";
+        proxy_cache_valid 200 301 302 3650d;
+        proxy_cache_valid 404 1m;
+        proxy_cache_use_stale error timeout updating
+        http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 5s;
+
+        proxy_hide_header Cache-Control;
+        proxy_hide_header Set-Cookie;
+        add_header Cache-Control "max-age=31536000, public";
+        add_header X-Robots-Tag "noindex, nofollow";
+
+        proxy_buffering on;
+        proxy_buffer_size 16k;
+        proxy_buffers 8 32k;
+        proxy_busy_buffers_size 64k;
+        proxy_max_temp_file_size 0;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+
+        add_header X-Cache-Status $upstream_cache_status always;
+    }
+}
+

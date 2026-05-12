@@ -1,11 +1,9 @@
 # proxy-config
 
-> **⚠️ Personal setup — not intended for production use.**
+> **⚠️ Personal setup, not intended for production use.**
 > This configuration is tailored to a specific personal environment. It is published for reference only. Use at your own risk.
 
 ## Setup
-
-Run once on a fresh server:
 
 ```bash
 git clone https://github.com/LynxTR/proxy-config.git && \
@@ -13,17 +11,16 @@ cd proxy-config && \
 sudo ./bootstrap.sh
 ```
 
-Installs nginx + fail2ban, applies sysctl tuning, deploys all configs, and puts `lynxsetup` on your PATH.
-
 ## Commands
 
 ```bash
-lynxsetup list                                           # show all domains
-sudo lynxsetup add <domain> <backend-ip> <port>          # add an app
-sudo lynxsetup add-imgproxy <domain> <backend-ip> <port> # add imgproxy cache
-sudo lynxsetup add-ssh-key "<pubkey>"                    # add SSH key + disable password auth
-sudo lynxsetup delete <domain>                           # remove (prompts confirm)
-sudo lynxsetup delete <domain> -y                        # remove without prompt
+lynxsetup list                                                              # show all domains
+sudo lynxsetup add <domain> <backend-ip> <port>                             # add an app
+sudo lynxsetup add-imgproxy <domain> <backend-ip> <port>                    # add imgproxy cache
+sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [prefix]              # add R2 bucket proxy
+sudo lynxsetup add-ssh-key "<pubkey>"                                       # add SSH key + disable password auth
+sudo lynxsetup delete <domain>                                              # remove (prompts confirm)
+sudo lynxsetup delete <domain> -y                                           # remove without prompt
 ```
 
 ## Examples
@@ -31,15 +28,20 @@ sudo lynxsetup delete <domain> -y                        # remove without prompt
 ```bash
 sudo lynxsetup add app.example.com 10.0.0.1 3000
 sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080
+sudo lynxsetup add-r2 assets assets.example.com r2.example.com /assets
 lynxsetup list
 sudo lynxsetup delete app.example.com
 ```
 
-## Cloudflare
+## R2 Bucket Proxy
 
-For each domain: DNS A record → orange cloud on → SSL/TLS mode **Flexible**.
+Serves files from a Cloudflare R2 bucket via its Cloudflare custom domain.
 
-> Direct connections to the server IP (bypassing Cloudflare) are blocked with 403.
+**Prerequisite:** attach a custom domain to your bucket in the Cloudflare dashboard:
+
+```bash
+sudo lynxsetup add-r2 <app-name> <domain> <r2-custom-domain> [path-prefix]
+```
 
 ## fail2ban
 
