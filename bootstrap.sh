@@ -67,10 +67,12 @@ cp "$SCRIPT_DIR/snippets/"*.conf "$NGINX_DIR/snippets/"
 
 cp "$SCRIPT_DIR/logrotate/nginx" /etc/logrotate.d/nginx
 
-# Image proxy cache directory (used if imgproxy is later configured)
-mkdir -p "$CACHE_DIR"
-chown -R "$NGINX_USER:$NGINX_USER" "$CACHE_DIR"
-chmod 700 "$CACHE_DIR"
+# Cache directories (created now; populated on first use)
+for cache_dir in "$CACHE_DIR" /var/cache/nginx/r2; do
+    mkdir -p "$cache_dir"
+    chown -R "$NGINX_USER:$NGINX_USER" "$cache_dir"
+    chmod 700 "$cache_dir"
+done
 
 success "nginx config deployed"
 
@@ -86,7 +88,6 @@ mkdir -p /etc/fail2ban/jail.d /etc/fail2ban/filter.d
 
 cp "$SCRIPT_DIR/fail2ban/jail.d/nginx.conf"             /etc/fail2ban/jail.d/nginx.conf
 cp "$SCRIPT_DIR/fail2ban/jail.d/ssh.conf"               /etc/fail2ban/jail.d/ssh.conf
-cp "$SCRIPT_DIR/fail2ban/filter.d/nginx-ratelimit.conf" /etc/fail2ban/filter.d/nginx-ratelimit.conf
 cp "$SCRIPT_DIR/fail2ban/filter.d/nginx-4xx.conf"       /etc/fail2ban/filter.d/nginx-4xx.conf
 
 success "fail2ban configs deployed"
