@@ -19,6 +19,7 @@ sudo lynxsetup add <domain> <backend-ip> <port>                             # ad
 sudo lynxsetup add-imgproxy <domain> <backend-ip> <port>                    # add imgproxy cache
 sudo lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]             # add R2 bucket proxy
 sudo lynxsetup add-ssh-key "<pubkey>"                                       # add SSH key + disable password auth
+sudo lynxsetup add-cert <domain> <cert-path> <key-path>                     # add SSH key + disable password auth
 sudo lynxsetup delete <domain>                                              # remove (prompts confirm)
 sudo lynxsetup delete <domain> -y                                           # remove without prompt
 
