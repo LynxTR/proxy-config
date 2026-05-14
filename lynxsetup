@@ -6,6 +6,7 @@
 #   sudo lynxsetup add <domain> <upstream-ip> <port>             add a reverse-proxy domain
 #   sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>    add an imgproxy caching domain
 #   sudo lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]     add an R2 bucket proxy
+#   sudo lynxsetup add-cert <domain> <cert-file> <key-file>      install TLS cert and enable HTTPS for a domain
 #   sudo lynxsetup delete <domain>                               remove a domain
 #   sudo lynxsetup add-ssh-key "<pubkey>"                        add SSH public key + disable password auth
 #   sudo lynxsetup update                                        pull latest repo changes and re-apply config
@@ -15,6 +16,7 @@
 #   sudo lynxsetup add app.client1.com 10.0.0.1 3000
 #   sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080
 #   sudo lynxsetup add-r2 assets.example.com r2.example.com /assets
+#   sudo lynxsetup add-cert image.example.com ./image.crt ./image.key
 #   sudo lynxsetup delete app.client1.com
 #   sudo lynxsetup add-ssh-key "ssh-ed25519 AAAA... user@host"
 
@@ -304,6 +306,131 @@ cmd_add_ssh_key() {
 }
 
 # ---------------------------------------------------------------------------
+# lynxsetup add-cert <domain> <cert-file> <key-file>
+# ---------------------------------------------------------------------------
+cmd_add_cert() {
+    require_root add-cert "$@"
+
+    if [[ $# -ne 3 ]]; then
+        echo "Usage: sudo lynxsetup add-cert <domain> <cert-file> <key-file>"
+        echo "  e.g. sudo lynxsetup add-cert image.example.com ./image.crt ./image.key"
+        exit 1
+    fi
+
+    local domain="$1" cert_src="$2" key_src="$3"
+
+    [[ -f "$cert_src" ]] || error "Certificate file not found: $cert_src"
+    [[ -f "$key_src"  ]] || error "Key file not found: $key_src"
+
+    # Validate the key file looks like a PEM private key
+    grep -q 'PRIVATE KEY' "$key_src" || error "Key file does not appear to be a PEM private key: $key_src"
+
+    # Install certs
+    local cert_dir="/etc/nginx/certs/${domain}"
+    local cert_dest="${cert_dir}/cert.pem"
+    local key_dest="${cert_dir}/key.pem"
+
+    info "Installing certificate for $domain → $cert_dir"
+    mkdir -p "$cert_dir"
+    cp "$cert_src" "$cert_dest"
+    cp "$key_src"  "$key_dest"
+    chmod 644 "$cert_dest"
+    chmod 600 "$key_dest"
+    success "Certs installed"
+    echo "  Cert: $cert_dest"
+    echo "  Key:  $key_dest"
+
+    # Locate the existing nginx conf for this domain
+    local conf_file=""
+    local filename
+    filename=$(domain_to_filename "$domain")
+    [[ -f "$NGINX_CONF_DIR/$filename" ]] && conf_file="$NGINX_CONF_DIR/$filename"
+
+    # Fallback: scan all confs for a matching server_name
+    if [[ -z "$conf_file" ]]; then
+        shopt -s nullglob
+        for f in "$NGINX_CONF_DIR"/*.conf; do
+            if grep -qP "^\s*server_name\s+${domain}\s*;" "$f" 2>/dev/null; then
+                conf_file="$f"
+                break
+            fi
+        done
+        shopt -u nullglob
+    fi
+
+    if [[ -z "$conf_file" ]]; then
+        warn "No nginx config found for $domain — certs installed but nginx not updated."
+        warn "Add the domain first with: sudo lynxsetup add $domain <upstream> <port>"
+        warn "Then re-run: sudo lynxsetup add-cert $domain $cert_src $key_src"
+        exit 0
+    fi
+
+    # Check if SSL is already configured
+    if grep -q 'listen 443' "$conf_file"; then
+        info "SSL already configured in $(basename "$conf_file") — updating cert paths only."
+        sed -i \
+            -e "s|ssl_certificate .*;|ssl_certificate     ${cert_dest};|g" \
+            -e "s|ssl_certificate_key .*;|ssl_certificate_key ${key_dest};|g" \
+            "$conf_file"
+        info "Testing nginx config"
+        nginx -t 2>&1 || error "nginx config test failed — fix the issue and try again."
+        systemctl reload nginx
+        success "Certs updated and nginx reloaded"
+        return
+    fi
+
+    info "Patching $conf_file to enable SSL on port 443"
+    local backup="${conf_file}.bak.$(date +%Y%m%d%H%M%S)"
+    cp "$conf_file" "$backup"
+    info "Backup saved: $backup"
+
+    # 1. Swap listen 80 → 443 ssl http2, inject ssl_certificate lines after server_name.
+    # 2. Prepend a plain-HTTP redirect block.
+    local patched
+    patched=$(
+        sed \
+            -e 's|listen 80;|listen 443 ssl http2;|g' \
+            -e 's|listen \[::\]:80;|listen [::]:443 ssl http2;|g' \
+            "$conf_file" \
+        | awk \
+            -v cert="$cert_dest" \
+            -v key="$key_dest" \
+            -v domain="$domain" '
+            /server_name / && index($0, domain) {
+                print
+                print "    ssl_certificate     " cert ";"
+                print "    ssl_certificate_key " key ";"
+                next
+            }
+            { print }
+        '
+    )
+
+    {
+        printf '# HTTP → HTTPS redirect for %s\n' "$domain"
+        printf 'server {\n'
+        printf '    listen 80;\n'
+        printf '    listen [::]:80;\n'
+        printf '    server_name %s;\n' "$domain"
+        printf '    return 301 https://$host$request_uri;\n'
+        printf '}\n\n'
+        printf '%s\n' "$patched"
+    } > "$conf_file"
+
+    info "Testing nginx config"
+    if ! nginx -t 2>&1; then
+        cp "$backup" "$conf_file"
+        error "nginx config test failed — reverted to backup ($backup). Fix the issue and try again."
+    fi
+
+    systemctl reload nginx
+    success "HTTPS enabled for $domain"
+    echo "  Config: $conf_file"
+    echo "  Cert:   $cert_dest"
+    echo "  Key:    $key_dest"
+}
+
+# ---------------------------------------------------------------------------
 # lynxsetup delete <domain>
 # ---------------------------------------------------------------------------
 cmd_delete() {
@@ -447,6 +574,7 @@ usage() {
     echo "  sudo lynxsetup add <domain> <upstream-ip> <port>"
     echo "  sudo lynxsetup add-imgproxy <domain> <upstream-ip> <port>"
     echo "  sudo lynxsetup add-r2 <domain> <r2-custom-domain> [path-prefix]"
+    echo "  sudo lynxsetup add-cert <domain> <cert-file> <key-file>"
     echo "  sudo lynxsetup delete <domain> [-y]"
     echo "  sudo lynxsetup update"
     echo ""
@@ -455,6 +583,7 @@ usage() {
     echo "  sudo lynxsetup add app.client1.com 10.0.0.1 3000"
     echo "  sudo lynxsetup add-imgproxy img.example.com 10.0.0.1 8080"
     echo "  sudo lynxsetup add-r2 assets.example.com r2.example.com /assets"
+    echo "  sudo lynxsetup add-cert image.example.com ./image.crt ./image.key"
     echo "  sudo lynxsetup delete app.client1.com"
     echo "  sudo lynxsetup delete app.client1.com -y   # skip confirmation"
     echo "  sudo lynxsetup add-ssh-key \"ssh-ed25519 AAAA... user@host\""
@@ -466,6 +595,7 @@ case "${1:-}" in
     add)            shift; cmd_add          "$@" ;;
     add-imgproxy)   shift; cmd_add_imgproxy "$@" ;;
     add-r2)         shift; cmd_add_r2       "$@" ;;
+    add-cert)       shift; cmd_add_cert     "$@" ;;
     add-ssh-key)    shift; cmd_add_ssh_key  "$@" ;;
     delete)         shift; cmd_delete       "$@" ;;
     update)         shift; cmd_update       "$@" ;;
