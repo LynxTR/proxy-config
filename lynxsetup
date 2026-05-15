@@ -389,8 +389,8 @@ cmd_add_cert() {
     local patched
     patched=$(
         sed \
-            -e 's|listen 80;|listen 443 ssl http2;|g' \
-            -e 's|listen \[::\]:80;|listen [::]:443 ssl http2;|g' \
+            -e 's|listen 80;|listen 443 ssl;|g' \
+            -e 's|listen \[::\]:80;|listen [::]:443 ssl;|g' \
             "$conf_file" \
         | awk \
             -v cert="$cert_dest" \
@@ -398,6 +398,7 @@ cmd_add_cert() {
             -v domain="$domain" '
             /server_name / && index($0, domain) {
                 print
+                print "    http2               on;"
                 print "    ssl_certificate     " cert ";"
                 print "    ssl_certificate_key " key ";"
                 next
